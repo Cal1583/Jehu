@@ -139,10 +139,10 @@ class BibleDB:
     def verse_index(self, book_number: int, chapter: int, verse: int) -> int:
         cursor = self.connection.cursor()
         row = cursor.execute(
-            f\"SELECT COUNT(*) FROM {self.schema.verse_table} \"
-            f\"WHERE {self.schema.book_column}=? AND (\"
-            f\"{self.schema.chapter_column} < ? OR \"
-            f\"({self.schema.chapter_column}=? AND {self.schema.verse_column} <= ?))\",
+            f"SELECT COUNT(*) FROM {self.schema.verse_table} "
+            f"WHERE {self.schema.book_column}=? AND ("
+            f"{self.schema.chapter_column} < ? OR "
+            f"({self.schema.chapter_column}=? AND {self.schema.verse_column} <= ?))",
             (book_number, chapter, chapter, verse),
         ).fetchone()
         return int(row[0]) if row else 0
