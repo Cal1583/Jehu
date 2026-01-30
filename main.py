@@ -19,6 +19,7 @@ from pathlib import Path
 
 from verse_wallpaper.cursor import advance_if_needed
 from verse_wallpaper.db import BibleDB, available_databases
+from verse_wallpaper.palettes import get_palette_map
 from verse_wallpaper.renderer import AnalyticsContent, ScriptureContent, WallpaperRenderer
 from verse_wallpaper.state import StateStore
 from verse_wallpaper.ui import VerseWallpaperApp
@@ -36,9 +37,14 @@ def _find_db_path(state_path: str | None) -> Path | None:
     return candidates[0] if candidates else None
 
 
+def _palette_paths() -> list[Path]:
+    return [Path.cwd() / "palettes.json", Path.cwd() / "assets" / "palettes.json"]
+
+
 def run_daily() -> int:
     state_store = StateStore()
     state = state_store.load()
+    palette_map = get_palette_map(_palette_paths())
     db_path = _find_db_path(state.db_path)
     if not db_path:
         print("No Bible database found. Please run the GUI to configure.")
@@ -82,7 +88,9 @@ def run_daily() -> int:
     )
 
     renderer = WallpaperRenderer()
-    image = renderer.render(scripture, analytics)
+    palette = palette_map.get(state.palette_name) or palette_map.get("Default")
+    palette_colors = palette.colors if palette else None
+    image = renderer.render(scripture, analytics, palette_colors=palette_colors)
     path = save_wallpaper(image)
     set_wallpaper(path)
 

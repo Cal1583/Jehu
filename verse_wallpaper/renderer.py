@@ -11,6 +11,7 @@ import importlib.util
 
 from PIL import Image, ImageDraw, ImageFont
 
+from .backgrounds import paint_palette_background
 from .db import book_name
 
 if importlib.util.find_spec("squarify"):
@@ -72,8 +73,15 @@ class WallpaperRenderer:
                 continue
         return ImageFont.load_default()
 
-    def render(self, scripture: ScriptureContent, analytics: AnalyticsContent) -> Image.Image:
+    def render(
+        self,
+        scripture: ScriptureContent,
+        analytics: AnalyticsContent,
+        palette_colors: list[tuple[int, int, int]] | None = None,
+    ) -> Image.Image:
         image = Image.new("RGB", (self.context.width, self.context.height), self.background_color)
+        if palette_colors:
+            paint_palette_background(image, palette_colors)
         draw = ImageDraw.Draw(image)
         page_margin = 120
         gutter_width = 40
