@@ -90,7 +90,12 @@ def run_daily() -> int:
     renderer = WallpaperRenderer()
     palette = palette_map.get(state.palette_name) or palette_map.get("Default")
     palette_colors = palette.colors if palette else None
-    image = renderer.render(scripture, analytics, palette_colors=palette_colors)
+    image = renderer.render(
+        scripture,
+        analytics,
+        palette_colors=palette_colors,
+        dark_mode=state.dark_mode,
+    )
     path = save_wallpaper(image)
     set_wallpaper(path)
 

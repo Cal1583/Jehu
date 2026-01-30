@@ -52,6 +52,9 @@ class WallpaperRenderer:
         self.text_color = (40, 40, 40)
         self.accent_color = (90, 90, 90)
         self.shadow_color = (210, 210, 210)
+        self.treemap_fill_current = (200, 210, 230)
+        self.treemap_fill_remaining = (230, 230, 230)
+        self.treemap_outline_color = (160, 160, 160)
         self.font_body = self._load_font(28)
         self.font_body_small = self._load_font(24)
         self.font_header = self._load_font(36, bold=True)
@@ -78,7 +81,9 @@ class WallpaperRenderer:
         scripture: ScriptureContent,
         analytics: AnalyticsContent,
         palette_colors: list[tuple[int, int, int]] | None = None,
+        dark_mode: bool = False,
     ) -> Image.Image:
+        self._apply_theme(dark_mode)
         image = Image.new("RGB", (self.context.width, self.context.height), self.background_color)
         if palette_colors:
             paint_palette_background(image, palette_colors)
@@ -109,6 +114,20 @@ class WallpaperRenderer:
         self._draw_analytics(draw, left_x, top_y, page_width, page_height, analytics)
 
         return image
+
+    def _apply_theme(self, dark_mode: bool) -> None:
+        if dark_mode:
+            self.page_color = (18, 18, 18)
+            self.text_color = (234, 234, 234)
+            self.accent_color = (200, 200, 200)
+            self.shadow_color = (10, 10, 10)
+            self.treemap_outline_color = (220, 220, 220)
+        else:
+            self.page_color = (250, 249, 246)
+            self.text_color = (40, 40, 40)
+            self.accent_color = (90, 90, 90)
+            self.shadow_color = (210, 210, 210)
+            self.treemap_outline_color = (160, 160, 160)
 
     def _draw_scripture(
         self,
@@ -217,9 +236,8 @@ class WallpaperRenderer:
         )
         for index, rect in enumerate(rects):
             book_num, size = analytics.book_lengths[index]
-            fill = (200, 210, 230) if index <= current_index else (230, 230, 230)
-            outline = (160, 160, 160)
-            draw.rectangle(rect, fill=fill, outline=outline, width=1)
+            fill = self.treemap_fill_current if index <= current_index else self.treemap_fill_remaining
+            draw.rectangle(rect, fill=fill, outline=self.treemap_outline_color, width=1)
             label = book_name(book_num)
             label_font = self.font_label
             if rect[2] - rect[0] > 120 and rect[3] - rect[1] > 40:
