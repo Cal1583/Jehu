@@ -49,12 +49,14 @@ class WallpaperRenderer:
         self.context = context or RenderContext()
         self.background_color = (238, 238, 238)
         self.page_color = (250, 249, 246)
+        self.metrics_page_color = (250, 249, 246)
         self.text_color = (40, 40, 40)
         self.accent_color = (90, 90, 90)
         self.shadow_color = (210, 210, 210)
         self.treemap_fill_current = (200, 210, 230)
         self.treemap_fill_remaining = (230, 230, 230)
         self.treemap_outline_color = (160, 160, 160)
+        self.metrics_text_color = (40, 40, 40)
         self.font_body = self._load_font(28)
         self.font_body_small = self._load_font(24)
         self.font_header = self._load_font(36, bold=True)
@@ -105,7 +107,7 @@ class WallpaperRenderer:
             [right_x + shadow_offset, top_y + shadow_offset, right_x + page_width + shadow_offset, top_y + page_height + shadow_offset],
             fill=self.shadow_color,
         )
-        draw.rectangle([left_x, top_y, left_x + page_width, top_y + page_height], fill=self.page_color)
+        draw.rectangle([left_x, top_y, left_x + page_width, top_y + page_height], fill=self.metrics_page_color)
         draw.rectangle([right_x, top_y, right_x + page_width, top_y + page_height], fill=self.page_color)
         spine_x = left_x + page_width + gutter_width // 2
         draw.line([spine_x, top_y, spine_x, top_y + page_height], fill=self.accent_color, width=2)
@@ -121,13 +123,11 @@ class WallpaperRenderer:
             self.text_color = (234, 234, 234)
             self.accent_color = (200, 200, 200)
             self.shadow_color = (10, 10, 10)
-            self.treemap_outline_color = (220, 220, 220)
         else:
             self.page_color = (250, 249, 246)
             self.text_color = (40, 40, 40)
             self.accent_color = (90, 90, 90)
             self.shadow_color = (210, 210, 210)
-            self.treemap_outline_color = (160, 160, 160)
 
     def _draw_scripture(
         self,
@@ -221,7 +221,7 @@ class WallpaperRenderer:
     ) -> None:
         padding = 40
         header = "Reading Progress"
-        draw.text((x + padding, y + padding), header, fill=self.text_color, font=self.font_header_small)
+        draw.text((x + padding, y + padding), header, fill=self.metrics_text_color, font=self.font_header_small)
         header_height = self.font_header_small.getbbox(header)[3]
         chart_top = y + padding + header_height + 20
         chart_height = height - (chart_top - y) - padding * 2
@@ -241,7 +241,7 @@ class WallpaperRenderer:
             label = book_name(book_num)
             label_font = self.font_label
             if rect[2] - rect[0] > 120 and rect[3] - rect[1] > 40:
-                draw.text((rect[0] + 6, rect[1] + 6), label, fill=self.text_color, font=label_font)
+                draw.text((rect[0] + 6, rect[1] + 6), label, fill=self.metrics_text_color, font=label_font)
 
         stats_y = chart_y + chart_height + 20
         stats = [
@@ -250,7 +250,7 @@ class WallpaperRenderer:
             f"Days advanced: {analytics.days_advanced}",
         ]
         for stat in stats:
-            draw.text((x + padding, stats_y), stat, fill=self.text_color, font=self.font_label)
+            draw.text((x + padding, stats_y), stat, fill=self.metrics_text_color, font=self.font_label)
             stats_y += self.font_label.getbbox(stat)[3] + 8
 
 
