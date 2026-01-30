@@ -13,7 +13,7 @@ from .cursor import advance_if_needed
 from .db import BibleDB, available_databases, book_name
 from .palettes import Palette, load_palettes
 from .parser import parse_reference
-from .renderer import AnalyticsContent, ScriptureContent, WallpaperRenderer
+from .renderer import AnalyticsContent, RenderContext, ScriptureContent, WallpaperRenderer
 from .state import AppState, StateStore
 from .wallpaper import save_wallpaper, set_wallpaper
 
@@ -75,6 +75,12 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.palette_combo = QtWidgets.QComboBox()
         form_layout.addRow("Palette", self.palette_combo)
+
+        self.resolution_combo = QtWidgets.QComboBox()
+        self.resolution_combo.addItem("1920 x 1080", (1920, 1080))
+        self.resolution_combo.addItem("2560 x 1440", (2560, 1440))
+        self.resolution_combo.addItem("3440 x 1440", (3440, 1440))
+        form_layout.addRow("Resolution", self.resolution_combo)
 
         self.dark_mode_checkbox = QtWidgets.QCheckBox("Dark Mode")
         self.dark_mode_checkbox.toggled.connect(self._on_dark_mode_toggled)
@@ -196,6 +202,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._update_verse_enabled()
         self._select_palette(self.state.palette_name)
         self.dark_mode_checkbox.setChecked(self.state.dark_mode)
+        self._select_resolution(self.state.output_width, self.state.output_height)
 
     def _find_companion_db_path(self, stem_name: str) -> Path | None:
         if not self.bible:
@@ -326,6 +333,21 @@ class MainWindow(QtWidgets.QMainWindow):
             self.palette_combo.setCurrentIndex(index)
             self.palette_combo.blockSignals(False)
 
+    def _select_resolution(self, width: int, height: int) -> None:
+        index = self.resolution_combo.findData((width, height))
+        if index < 0:
+            index = self.resolution_combo.findData((3440, 1440))
+        if index >= 0:
+            self.resolution_combo.blockSignals(True)
+            self.resolution_combo.setCurrentIndex(index)
+            self.resolution_combo.blockSignals(False)
+
+    def _current_output_size(self) -> tuple[int, int]:
+        data = self.resolution_combo.currentData()
+        if isinstance(data, tuple) and len(data) == 2:
+            return int(data[0]), int(data[1])
+        return self.state.output_width, self.state.output_height
+
     def _current_palette_name(self) -> str:
         name = self.palette_combo.currentText() or "Default"
         if name not in self.palette_map:
@@ -394,6 +416,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.selected_verse = self.state.cursor.verse
         self.state.palette_name = self._current_palette_name()
         self.state.dark_mode = self.dark_mode_checkbox.isChecked()
+        self.state.output_width, self.state.output_height = self._current_output_size()
         self.state_store.save(self.state)
         self._render_and_set()
 
@@ -405,6 +428,7 @@ class MainWindow(QtWidgets.QMainWindow):
             cursor_override=self._selection_cursor(),
             palette_name=self._current_palette_name(),
             dark_mode=self.dark_mode_checkbox.isChecked(),
+            output_size=self._current_output_size(),
         )
         qt_image = ImageQt(image)
         pixmap = QtGui.QPixmap.fromImage(qt_image)
@@ -420,6 +444,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._render_and_set(
             palette_name=self._current_palette_name(),
             dark_mode=self.dark_mode_checkbox.isChecked(),
+            output_size=self._current_output_size(),
         )
 
     def _selection_cursor(self):
@@ -434,11 +459,17 @@ class MainWindow(QtWidgets.QMainWindow):
         cursor_override=None,
         palette_name: str | None = None,
         dark_mode: bool | None = None,
+        output_size: tuple[int, int] | None = None,
     ):
         if not self.bible:
             raise RuntimeError("Bible database not loaded.")
         if dark_mode is None:
             dark_mode = self.state.dark_mode
+        output_width, output_height = output_size or (
+            self.state.output_width,
+            self.state.output_height,
+        )
+        self.renderer.context = RenderContext(width=output_width, height=output_height)
         cursor = cursor_override or self.state.cursor
         book = cursor.book
         chapter = cursor.chapter
@@ -505,8 +536,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self,
         palette_name: str | None = None,
         dark_mode: bool | None = None,
+        output_size: tuple[int, int] | None = None,
     ) -> None:
-        image = self._render(palette_name=palette_name, dark_mode=dark_mode)
+        image = self._render(
+            palette_name=palette_name,
+            dark_mode=dark_mode,
+            output_size=output_size,
+        )
         path = save_wallpaper(image)
         set_wallpaper(path)
 

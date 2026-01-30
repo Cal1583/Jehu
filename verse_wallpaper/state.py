@@ -36,6 +36,8 @@ class AppState:
     db_path: str | None = None
     palette_name: str = "Default"
     dark_mode: bool = False
+    output_width: int = 3440
+    output_height: int = 1440
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -54,6 +56,8 @@ class AppState:
             "db_path": self.db_path,
             "palette_name": self.palette_name,
             "dark_mode": self.dark_mode,
+            "output_width": self.output_width,
+            "output_height": self.output_height,
         }
 
     @classmethod
@@ -76,6 +80,8 @@ class AppState:
             db_path=data.get("db_path"),
             palette_name=data.get("palette_name", "Default"),
             dark_mode=bool(data.get("dark_mode", False)),
+            output_width=int(data.get("output_width", 3440)),
+            output_height=int(data.get("output_height", 1440)),
         )
 
 
