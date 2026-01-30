@@ -42,6 +42,8 @@ class AnalyticsContent:
     current_verse: int
     progress_percent: float
     days_advanced: int
+    key_names: list[str]
+    repeated_concepts: list[str]
 
 
 class WallpaperRenderer:
@@ -252,6 +254,38 @@ class WallpaperRenderer:
         for stat in stats:
             draw.text((x + padding, stats_y), stat, fill=self.metrics_text_color, font=self.font_label)
             stats_y += self.font_label.getbbox(stat)[3] + 8
+
+        stats_y += 6
+        stats_y = self._draw_summary_block(
+            draw,
+            x + padding,
+            stats_y,
+            "Key Names",
+            analytics.key_names,
+        )
+        stats_y += 10
+        self._draw_summary_block(
+            draw,
+            x + padding,
+            stats_y,
+            "Repeated Concepts",
+            analytics.repeated_concepts,
+        )
+
+    def _draw_summary_block(
+        self,
+        draw: ImageDraw.ImageDraw,
+        x: int,
+        y: int,
+        title: str,
+        items: list[str],
+    ) -> int:
+        draw.text((x, y), title, fill=self.metrics_text_color, font=self.font_label)
+        y += self.font_label.getbbox(title)[3] + 6
+        for item in items:
+            draw.text((x + 10, y), item, fill=self.metrics_text_color, font=self.font_body_small)
+            y += self.font_body_small.getbbox(item)[3] + 4
+        return y
 
 
 def wrap_text(text: str, font: ImageFont.FreeTypeFont, max_width: int) -> list[str]:

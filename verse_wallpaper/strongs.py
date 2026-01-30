@@ -13,6 +13,7 @@ from .state import app_data_dir
 
 
 STRONGS_TAG_RE = re.compile(r"\{([GH]\d+)\}")
+WORD_BEFORE_TAG_RE = re.compile(r"([A-Za-z][A-Za-z'’\-]*)[^A-Za-z'’\-]*$")
 
 
 def strip_strongs_tags(text: str) -> str:
@@ -23,6 +24,18 @@ def strip_strongs_tags(text: str) -> str:
 def extract_strongs_ids(text: str) -> list[str]:
     """Extract Strong's IDs (e.g., H7225) from verse text."""
     return STRONGS_TAG_RE.findall(text)
+
+
+def extract_strongs_with_labels(text: str) -> list[tuple[str, str]]:
+    """Extract Strong's IDs with the preceding surface label."""
+    pairs: list[tuple[str, str]] = []
+    for match in STRONGS_TAG_RE.finditer(text):
+        strong_id = match.group(1)
+        prefix = text[: match.start()]
+        label_match = WORD_BEFORE_TAG_RE.search(prefix)
+        label = label_match.group(1) if label_match else ""
+        pairs.append((strong_id, label))
+    return pairs
 
 
 @dataclass(frozen=True)

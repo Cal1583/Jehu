@@ -11,6 +11,7 @@ from .constants import BOOKS, BOOK_NAME_BY_NUMBER
 from .strongs import (
     StrongsStoplist,
     extract_strongs_ids,
+    extract_strongs_with_labels,
     load_or_create_stoplist,
     strip_strongs_tags,
 )
@@ -161,6 +162,52 @@ class BibleDB:
             for strong_id in filtered:
                 occurrence_counts[strong_id] = occurrence_counts.get(strong_id, 0) + 1
         return vocabulary_counts, occurrence_counts
+
+    def chapter_strongs_summary(self, book_number: int, chapter: int) -> tuple[list[str], list[str]]:
+        """Return (key_names, repeated_concepts) summary lines for a chapter."""
+        cursor = self.connection.cursor()
+        rows = cursor.execute(
+            f"SELECT {self.schema.text_column} FROM {self.schema.verse_table} "
+            f"WHERE {self.schema.book_column}=? AND {self.schema.chapter_column}=? "
+            f"ORDER BY {self.schema.verse_column}",
+            (book_number, chapter),
+        ).fetchall()
+        stoplist = self.strongs_stoplist
+        counts: dict[str, int] = {}
+        labels: dict[str, str] = {}
+        for row in rows:
+            text = str(row[0])
+            for strong_id, label in extract_strongs_with_labels(text):
+                if not self.include_common_strongs and strong_id in stoplist.ids:
+                    continue
+                if not label:
+                    continue
+                counts[strong_id] = counts.get(strong_id, 0) + 1
+                if strong_id not in labels:
+                    labels[strong_id] = label
+        items = [(strong_id, labels.get(strong_id, ""), count) for strong_id, count in counts.items()]
+        key_candidates = [
+            item
+            for item in items
+            if item[1] and item[1][:1].isupper() and item[2] >= 2
+        ]
+        key_candidates.sort(key=lambda item: (-item[2], item[1]))
+        key_items = key_candidates[:5]
+        key_ids = {strong_id for strong_id, _, _ in key_items}
+        key_names = [f"{label} ({strong_id}) × {count}" for strong_id, label, count in key_items]
+
+        concept_candidates = [item for item in items if item[0] not in key_ids]
+        concept_candidates.sort(key=lambda item: (-item[2], item[1]))
+        threshold = 3
+        filtered = [item for item in concept_candidates if item[2] >= threshold]
+        if not filtered:
+            threshold = 2
+            filtered = [item for item in concept_candidates if item[2] >= threshold]
+        repeated = []
+        for strong_id, label, count in filtered[:8]:
+            display_label = label if label[:1].isupper() else label.lower()
+            repeated.append(f"{display_label} ({strong_id}) × {count}")
+        return key_names, repeated
 
     def book_lengths(self) -> list[tuple[int, int]]:
         """Return (book_number, verse_count)."""
