@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Iterable
 
 from .constants import BOOKS, BOOK_NAME_BY_NUMBER
+from .strongs import (
+    StrongsStoplist,
+    extract_strongs_ids,
+    load_or_create_stoplist,
+    strip_strongs_tags,
+)
 
 
 @dataclass(frozen=True)
@@ -34,6 +40,19 @@ class BibleDB:
         self.connection = sqlite3.connect(db_path)
         self.connection.row_factory = sqlite3.Row
         self.schema = self._detect_schema()
+        self._strongs_stoplist: StrongsStoplist | None = None
+        self._strongs_top_n = 50
+        self.include_common_strongs = False
+
+    @property
+    def strongs_stoplist(self) -> StrongsStoplist:
+        if self._strongs_stoplist is None:
+            self._strongs_stoplist = load_or_create_stoplist(
+                self.db_path,
+                self._all_verse_texts(),
+                top_n=self._strongs_top_n,
+            )
+        return self._strongs_stoplist
 
     def _detect_schema(self) -> SchemaMapping:
         cursor = self.connection.cursor()
@@ -107,7 +126,7 @@ class BibleDB:
             f"AND {self.schema.chapter_column}=? ORDER BY {self.schema.verse_column}",
             (book_number, chapter),
         ).fetchall()
-        return [(int(row[0]), str(row[1])) for row in rows]
+        return [(int(row[0]), strip_strongs_tags(str(row[1]))) for row in rows]
 
     def verse_text(self, book_number: int, chapter: int, verse: int) -> str:
         cursor = self.connection.cursor()
@@ -117,7 +136,31 @@ class BibleDB:
             f"AND {self.schema.verse_column}=?",
             (book_number, chapter, verse),
         ).fetchone()
-        return str(row[0]) if row else ""
+        return strip_strongs_tags(str(row[0])) if row else ""
+
+    def chapter_strongs_metrics(
+        self, book_number: int, chapter: int
+    ) -> tuple[dict[str, int], dict[str, int]]:
+        """Return (vocabulary_counts, occurrence_counts) for Strong's IDs in a chapter."""
+        cursor = self.connection.cursor()
+        rows = cursor.execute(
+            f"SELECT {self.schema.text_column} FROM {self.schema.verse_table} "
+            f"WHERE {self.schema.book_column}=? AND {self.schema.chapter_column}=? "
+            f"ORDER BY {self.schema.verse_column}",
+            (book_number, chapter),
+        ).fetchall()
+        stoplist = self.strongs_stoplist
+        vocabulary_counts: dict[str, int] = {}
+        occurrence_counts: dict[str, int] = {}
+        for row in rows:
+            ids = extract_strongs_ids(str(row[0]))
+            filtered = stoplist.filter_ids(ids, include_common=self.include_common_strongs)
+            unique_ids = set(filtered)
+            for strong_id in unique_ids:
+                vocabulary_counts[strong_id] = vocabulary_counts.get(strong_id, 0) + 1
+            for strong_id in filtered:
+                occurrence_counts[strong_id] = occurrence_counts.get(strong_id, 0) + 1
+        return vocabulary_counts, occurrence_counts
 
     def book_lengths(self) -> list[tuple[int, int]]:
         """Return (book_number, verse_count)."""
@@ -149,6 +192,14 @@ class BibleDB:
 
     def close(self) -> None:
         self.connection.close()
+
+    def _all_verse_texts(self) -> Iterable[str]:
+        cursor = self.connection.cursor()
+        rows = cursor.execute(
+            f"SELECT {self.schema.text_column} FROM {self.schema.verse_table}"
+        ).fetchall()
+        for row in rows:
+            yield str(row[0])
 
 
 def available_databases(root: Path) -> list[Path]:
