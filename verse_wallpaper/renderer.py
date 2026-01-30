@@ -226,7 +226,14 @@ class WallpaperRenderer:
         draw.text((x + padding, y + padding), header, fill=self.metrics_text_color, font=self.font_header_small)
         header_height = self.font_header_small.getbbox(header)[3]
         chart_top = y + padding + header_height + 20
-        chart_height = height - (chart_top - y) - padding * 2
+        label_line_height = self.font_label.getbbox("Ag")[3] + 8
+        stats_lines_height = label_line_height * 3
+        summary_title_height = self.font_label.getbbox("Ag")[3] + 6
+        summary_item_height = self.font_body_small.getbbox("Ag")[3] + 4
+        key_names_height = summary_title_height + summary_item_height * 5
+        repeated_concepts_height = summary_title_height + summary_item_height * 8
+        bottom_reserved = 20 + stats_lines_height + 6 + key_names_height + 10 + repeated_concepts_height + padding
+        chart_height = height - (chart_top - y) - bottom_reserved
         chart_width = width - padding * 2
         chart_x = x + padding
         chart_y = chart_top
@@ -261,7 +268,7 @@ class WallpaperRenderer:
             x + padding,
             stats_y,
             "Key Names",
-            analytics.key_names,
+            analytics.key_names[:5],
         )
         stats_y += 10
         self._draw_summary_block(
@@ -269,7 +276,7 @@ class WallpaperRenderer:
             x + padding,
             stats_y,
             "Repeated Concepts",
-            analytics.repeated_concepts,
+            analytics.repeated_concepts[:8],
         )
 
     def _draw_summary_block(
@@ -282,6 +289,8 @@ class WallpaperRenderer:
     ) -> int:
         draw.text((x, y), title, fill=self.metrics_text_color, font=self.font_label)
         y += self.font_label.getbbox(title)[3] + 6
+        if not items:
+            items = ["—"]
         for item in items:
             draw.text((x + 10, y), item, fill=self.metrics_text_color, font=self.font_body_small)
             y += self.font_body_small.getbbox(item)[3] + 4
