@@ -20,7 +20,12 @@ from pathlib import Path
 from verse_wallpaper.cursor import advance_if_needed
 from verse_wallpaper.db import BibleDB, available_databases
 from verse_wallpaper.palettes import get_palette_map
-from verse_wallpaper.renderer import AnalyticsContent, ScriptureContent, WallpaperRenderer
+from verse_wallpaper.renderer import (
+    AnalyticsContent,
+    RenderContext,
+    ScriptureContent,
+    WallpaperRenderer,
+)
 from verse_wallpaper.state import StateStore
 from verse_wallpaper.ui import VerseWallpaperApp
 from verse_wallpaper.wallpaper import save_wallpaper, set_wallpaper
@@ -104,7 +109,9 @@ def run_daily() -> int:
         repeated_concepts=repeated_concepts,
     )
 
-    renderer = WallpaperRenderer()
+    renderer = WallpaperRenderer(
+        context=RenderContext(width=state.output_width, height=state.output_height)
+    )
     palette = palette_map.get(state.palette_name) or palette_map.get("Default")
     palette_colors = palette.colors if palette else None
     image = renderer.render(
