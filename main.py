@@ -41,6 +41,17 @@ def _palette_paths() -> list[Path]:
     return [Path.cwd() / "palettes.json", Path.cwd() / "assets" / "palettes.json"]
 
 
+def _find_companion_db_path(db_path: Path, stem_name: str) -> Path | None:
+    if db_path.stem.lower() == stem_name:
+        return db_path
+    candidate = db_path.with_name(f"{stem_name}{db_path.suffix}")
+    if candidate.exists():
+        return candidate
+    for path in db_path.parent.glob(f"{stem_name}*.sqlite"):
+        return path
+    return None
+
+
 def run_daily() -> int:
     state_store = StateStore()
     state = state_store.load()
@@ -49,7 +60,10 @@ def run_daily() -> int:
     if not db_path:
         print("No Bible database found. Please run the GUI to configure.")
         return 1
-    bible = BibleDB(db_path)
+    reading_db_path = _find_companion_db_path(db_path, "asv") or db_path
+    metrics_db_path = _find_companion_db_path(db_path, "asvs") or db_path
+    bible = BibleDB(reading_db_path)
+    metrics_bible = BibleDB(metrics_db_path) if metrics_db_path != reading_db_path else bible
     state = advance_if_needed(state, bible)
     translation = bible.list_translations()[0]
 
@@ -78,6 +92,7 @@ def run_daily() -> int:
     verse_index = bible.verse_index(book, chapter, verse)
     progress_percent = (verse_index / total_verses * 100) if total_verses else 0.0
     days_advanced = verse_index if state.mode == "verse" else chapter
+    key_names, repeated_concepts = metrics_bible.chapter_strongs_summary(book, chapter)
     analytics = AnalyticsContent(
         book_lengths=book_lengths,
         current_book=book,
@@ -85,6 +100,8 @@ def run_daily() -> int:
         current_verse=verse,
         progress_percent=progress_percent,
         days_advanced=days_advanced,
+        key_names=key_names,
+        repeated_concepts=repeated_concepts,
     )
 
     renderer = WallpaperRenderer()
@@ -100,6 +117,8 @@ def run_daily() -> int:
     set_wallpaper(path)
 
     state_store.save(state)
+    if metrics_bible is not bible:
+        metrics_bible.close()
     bible.close()
     return 0
 

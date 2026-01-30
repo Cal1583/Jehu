@@ -197,6 +197,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self._select_palette(self.state.palette_name)
         self.dark_mode_checkbox.setChecked(self.state.dark_mode)
 
+    def _find_companion_db_path(self, stem_name: str) -> Path | None:
+        if not self.bible:
+            return None
+        db_path = Path(self.bible.db_path)
+        if db_path.stem.lower() == stem_name:
+            return db_path
+        candidate = db_path.with_name(f"{stem_name}{db_path.suffix}")
+        if candidate.exists():
+            return candidate
+        for path in db_path.parent.glob(f"{stem_name}*.sqlite"):
+            return path
+        return None
+
     def _on_translation_changed(self, index: int) -> None:
         if index < 0 or index >= len(self.translations):
             return
@@ -426,49 +439,67 @@ class MainWindow(QtWidgets.QMainWindow):
             raise RuntimeError("Bible database not loaded.")
         if dark_mode is None:
             dark_mode = self.state.dark_mode
-        translation_name = self.translation_combo.currentText()
         cursor = cursor_override or self.state.cursor
         book = cursor.book
         chapter = cursor.chapter
         verse = cursor.verse
-        if self.state.mode == "chapter":
-            verses = self.bible.chapter_text(book, chapter)
-            lines = [f"{num} {text}" for num, text in verses]
-            header = f"{book_name(book)} {chapter}"
-            is_chapter = True
-        else:
-            text = self.bible.verse_text(book, chapter, verse)
-            lines = [text]
-            header = f"{book_name(book)} {chapter}:{verse}"
-            is_chapter = False
-        scripture = ScriptureContent(
-            header=header,
-            translation=translation_name,
-            lines=lines,
-            is_chapter=is_chapter,
-        )
-        book_lengths = self.bible.book_lengths()
-        total_verses = sum(length for _, length in book_lengths)
-        verse_index = self.bible.verse_index(book, chapter, verse)
-        progress_percent = (verse_index / total_verses * 100) if total_verses else 0.0
-        days_advanced = verse_index if self.state.mode == "verse" else chapter
-        analytics = AnalyticsContent(
-            book_lengths=book_lengths,
-            current_book=book,
-            current_chapter=chapter,
-            current_verse=verse,
-            progress_percent=progress_percent,
-            days_advanced=days_advanced,
-        )
-        palette_key = palette_name or self.state.palette_name
-        palette = self.palette_map.get(palette_key) or self.palette_map.get("Default")
-        palette_colors = palette.colors if palette else None
-        return self.renderer.render(
-            scripture,
-            analytics,
-            palette_colors=palette_colors,
-            dark_mode=dark_mode,
-        )
+        reading_db_path = self._find_companion_db_path("asv")
+        metrics_db_path = self._find_companion_db_path("asvs")
+        reading_bible = self.bible
+        if reading_db_path and Path(self.bible.db_path) != reading_db_path:
+            reading_bible = BibleDB(reading_db_path)
+        metrics_bible = reading_bible
+        if metrics_db_path and (not reading_db_path or metrics_db_path != reading_db_path):
+            if not reading_db_path or Path(reading_bible.db_path) != metrics_db_path:
+                metrics_bible = BibleDB(metrics_db_path)
+        try:
+            translation_name = reading_bible.list_translations()[0].name
+            if self.state.mode == "chapter":
+                verses = reading_bible.chapter_text(book, chapter)
+                lines = [f"{num} {text}" for num, text in verses]
+                header = f"{book_name(book)} {chapter}"
+                is_chapter = True
+            else:
+                text = reading_bible.verse_text(book, chapter, verse)
+                lines = [text]
+                header = f"{book_name(book)} {chapter}:{verse}"
+                is_chapter = False
+            scripture = ScriptureContent(
+                header=header,
+                translation=translation_name,
+                lines=lines,
+                is_chapter=is_chapter,
+            )
+            book_lengths = reading_bible.book_lengths()
+            total_verses = sum(length for _, length in book_lengths)
+            verse_index = reading_bible.verse_index(book, chapter, verse)
+            progress_percent = (verse_index / total_verses * 100) if total_verses else 0.0
+            days_advanced = verse_index if self.state.mode == "verse" else chapter
+            key_names, repeated_concepts = metrics_bible.chapter_strongs_summary(book, chapter)
+            analytics = AnalyticsContent(
+                book_lengths=book_lengths,
+                current_book=book,
+                current_chapter=chapter,
+                current_verse=verse,
+                progress_percent=progress_percent,
+                days_advanced=days_advanced,
+                key_names=key_names,
+                repeated_concepts=repeated_concepts,
+            )
+            palette_key = palette_name or self.state.palette_name
+            palette = self.palette_map.get(palette_key) or self.palette_map.get("Default")
+            palette_colors = palette.colors if palette else None
+            return self.renderer.render(
+                scripture,
+                analytics,
+                palette_colors=palette_colors,
+                dark_mode=dark_mode,
+            )
+        finally:
+            if reading_bible is not self.bible:
+                reading_bible.close()
+            if metrics_bible not in (self.bible, reading_bible):
+                metrics_bible.close()
 
     def _render_and_set(
         self,
