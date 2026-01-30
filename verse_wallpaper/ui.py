@@ -76,6 +76,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.palette_combo = QtWidgets.QComboBox()
         form_layout.addRow("Palette", self.palette_combo)
 
+        self.dark_mode_checkbox = QtWidgets.QCheckBox("Dark Mode")
+        self.dark_mode_checkbox.toggled.connect(self._on_dark_mode_toggled)
+        form_layout.addRow(self.dark_mode_checkbox)
+
         self.search_input = QtWidgets.QLineEdit()
         self.search_input.setPlaceholderText("Search (e.g., Rom 1:2)")
         self.search_input.returnPressed.connect(self._on_search)
@@ -191,6 +195,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._select_verse(self.state.selected_verse)
         self._update_verse_enabled()
         self._select_palette(self.state.palette_name)
+        self.dark_mode_checkbox.setChecked(self.state.dark_mode)
 
     def _on_translation_changed(self, index: int) -> None:
         if index < 0 or index >= len(self.translations):
@@ -375,6 +380,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.selected_chapter = self.state.cursor.chapter
         self.state.selected_verse = self.state.cursor.verse
         self.state.palette_name = self._current_palette_name()
+        self.state.dark_mode = self.dark_mode_checkbox.isChecked()
         self.state_store.save(self.state)
         self._render_and_set()
 
@@ -385,6 +391,7 @@ class MainWindow(QtWidgets.QMainWindow):
         image = self._render(
             cursor_override=self._selection_cursor(),
             palette_name=self._current_palette_name(),
+            dark_mode=self.dark_mode_checkbox.isChecked(),
         )
         qt_image = ImageQt(image)
         pixmap = QtGui.QPixmap.fromImage(qt_image)
@@ -397,7 +404,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.bible:
             self._prompt_for_db()
             return
-        self._render_and_set(palette_name=self._current_palette_name())
+        self._render_and_set(
+            palette_name=self._current_palette_name(),
+            dark_mode=self.dark_mode_checkbox.isChecked(),
+        )
 
     def _selection_cursor(self):
         return type(self.state.cursor)(
@@ -406,9 +416,16 @@ class MainWindow(QtWidgets.QMainWindow):
             verse=int(self.verse_combo.currentData() or 1),
         )
 
-    def _render(self, cursor_override=None, palette_name: str | None = None):
+    def _render(
+        self,
+        cursor_override=None,
+        palette_name: str | None = None,
+        dark_mode: bool | None = None,
+    ):
         if not self.bible:
             raise RuntimeError("Bible database not loaded.")
+        if dark_mode is None:
+            dark_mode = self.state.dark_mode
         translation_name = self.translation_combo.currentText()
         cursor = cursor_override or self.state.cursor
         book = cursor.book
@@ -446,12 +463,26 @@ class MainWindow(QtWidgets.QMainWindow):
         palette_key = palette_name or self.state.palette_name
         palette = self.palette_map.get(palette_key) or self.palette_map.get("Default")
         palette_colors = palette.colors if palette else None
-        return self.renderer.render(scripture, analytics, palette_colors=palette_colors)
+        return self.renderer.render(
+            scripture,
+            analytics,
+            palette_colors=palette_colors,
+            dark_mode=dark_mode,
+        )
 
-    def _render_and_set(self, palette_name: str | None = None) -> None:
-        image = self._render(palette_name=palette_name)
+    def _render_and_set(
+        self,
+        palette_name: str | None = None,
+        dark_mode: bool | None = None,
+    ) -> None:
+        image = self._render(palette_name=palette_name, dark_mode=dark_mode)
         path = save_wallpaper(image)
         set_wallpaper(path)
+
+    def _on_dark_mode_toggled(self, checked: bool) -> None:
+        if not self.bible:
+            return
+        self._on_preview()
 
 
 class VerseWallpaperApp(QtWidgets.QApplication):

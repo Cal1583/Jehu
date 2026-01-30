@@ -35,6 +35,7 @@ class AppState:
     selected_verse: int = 1
     db_path: str | None = None
     palette_name: str = "Default"
+    dark_mode: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,6 +53,7 @@ class AppState:
             "selected_verse": self.selected_verse,
             "db_path": self.db_path,
             "palette_name": self.palette_name,
+            "dark_mode": self.dark_mode,
         }
 
     @classmethod
@@ -73,6 +75,7 @@ class AppState:
             selected_verse=int(data.get("selected_verse", cursor.verse)),
             db_path=data.get("db_path"),
             palette_name=data.get("palette_name", "Default"),
+            dark_mode=bool(data.get("dark_mode", False)),
         )
 
 
