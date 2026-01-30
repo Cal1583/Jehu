@@ -11,6 +11,7 @@ from PIL.ImageQt import ImageQt
 from .constants import BOOKS
 from .cursor import advance_if_needed
 from .db import BibleDB, available_databases, book_name
+from .palettes import Palette, load_palettes
 from .parser import parse_reference
 from .renderer import AnalyticsContent, ScriptureContent, WallpaperRenderer
 from .state import AppState, StateStore
@@ -32,9 +33,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.renderer = WallpaperRenderer()
         self.bible: BibleDB | None = None
         self.translations: list[TranslationOption] = []
+        self.palettes: list[Palette] = []
+        self.palette_map: dict[str, Palette] = {}
         self.setWindowTitle("Verse Wallpaper")
         self.resize(900, 600)
         self._build_ui()
+        self._load_palettes()
         self._load_translations()
         self._apply_state()
 
@@ -68,6 +72,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.verse_combo = QtWidgets.QComboBox()
         self.verse_combo.currentIndexChanged.connect(self._on_verse_changed)
         form_layout.addRow("Verse", self.verse_combo)
+
+        self.palette_combo = QtWidgets.QComboBox()
+        form_layout.addRow("Palette", self.palette_combo)
 
         self.search_input = QtWidgets.QLineEdit()
         self.search_input.setPlaceholderText("Search (e.g., Rom 1:2)")
@@ -183,6 +190,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._populate_verses(self.state.selected_book, self.state.selected_chapter)
         self._select_verse(self.state.selected_verse)
         self._update_verse_enabled()
+        self._select_palette(self.state.palette_name)
 
     def _on_translation_changed(self, index: int) -> None:
         if index < 0 or index >= len(self.translations):
@@ -274,6 +282,38 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.selected_verse = int(verse)
         self.state_store.save(self.state)
 
+    def _palette_paths(self) -> list[Path]:
+        return [Path.cwd() / "palettes.json", Path.cwd() / "assets" / "palettes.json"]
+
+    def _load_palettes(self) -> None:
+        palette_path = next((path for path in self._palette_paths() if path.exists()), None)
+        if palette_path:
+            palettes = load_palettes(palette_path)
+        else:
+            palettes = load_palettes(self._palette_paths()[0])
+        self.palettes = palettes
+        self.palette_map = {palette.name: palette for palette in palettes}
+        self.palette_combo.blockSignals(True)
+        self.palette_combo.clear()
+        for palette in palettes:
+            self.palette_combo.addItem(palette.name)
+        self.palette_combo.blockSignals(False)
+
+    def _select_palette(self, palette_name: str) -> None:
+        index = self.palette_combo.findText(palette_name)
+        if index < 0:
+            index = self.palette_combo.findText("Default")
+        if index >= 0:
+            self.palette_combo.blockSignals(True)
+            self.palette_combo.setCurrentIndex(index)
+            self.palette_combo.blockSignals(False)
+
+    def _current_palette_name(self) -> str:
+        name = self.palette_combo.currentText() or "Default"
+        if name not in self.palette_map:
+            name = "Default"
+        return name
+
     def _select_book(self, book_number: int) -> None:
         index = self.book_combo.findData(book_number)
         if index >= 0:
@@ -334,6 +374,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.state.selected_book = self.state.cursor.book
         self.state.selected_chapter = self.state.cursor.chapter
         self.state.selected_verse = self.state.cursor.verse
+        self.state.palette_name = self._current_palette_name()
         self.state_store.save(self.state)
         self._render_and_set()
 
@@ -341,7 +382,10 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.bible:
             self._prompt_for_db()
             return
-        image = self._render(cursor_override=self._selection_cursor())
+        image = self._render(
+            cursor_override=self._selection_cursor(),
+            palette_name=self._current_palette_name(),
+        )
         qt_image = ImageQt(image)
         pixmap = QtGui.QPixmap.fromImage(qt_image)
         scaled = pixmap.scaled(
@@ -353,7 +397,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not self.bible:
             self._prompt_for_db()
             return
-        self._render_and_set()
+        self._render_and_set(palette_name=self._current_palette_name())
 
     def _selection_cursor(self):
         return type(self.state.cursor)(
@@ -362,7 +406,7 @@ class MainWindow(QtWidgets.QMainWindow):
             verse=int(self.verse_combo.currentData() or 1),
         )
 
-    def _render(self, cursor_override=None):
+    def _render(self, cursor_override=None, palette_name: str | None = None):
         if not self.bible:
             raise RuntimeError("Bible database not loaded.")
         translation_name = self.translation_combo.currentText()
@@ -399,10 +443,13 @@ class MainWindow(QtWidgets.QMainWindow):
             progress_percent=progress_percent,
             days_advanced=days_advanced,
         )
-        return self.renderer.render(scripture, analytics)
+        palette_key = palette_name or self.state.palette_name
+        palette = self.palette_map.get(palette_key) or self.palette_map.get("Default")
+        palette_colors = palette.colors if palette else None
+        return self.renderer.render(scripture, analytics, palette_colors=palette_colors)
 
-    def _render_and_set(self) -> None:
-        image = self._render()
+    def _render_and_set(self, palette_name: str | None = None) -> None:
+        image = self._render(palette_name=palette_name)
         path = save_wallpaper(image)
         set_wallpaper(path)
 

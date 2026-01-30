@@ -34,6 +34,7 @@ class AppState:
     selected_chapter: int = 1
     selected_verse: int = 1
     db_path: str | None = None
+    palette_name: str = "Default"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -50,6 +51,7 @@ class AppState:
             "selected_chapter": self.selected_chapter,
             "selected_verse": self.selected_verse,
             "db_path": self.db_path,
+            "palette_name": self.palette_name,
         }
 
     @classmethod
@@ -70,6 +72,7 @@ class AppState:
             selected_chapter=int(data.get("selected_chapter", cursor.chapter)),
             selected_verse=int(data.get("selected_verse", cursor.verse)),
             db_path=data.get("db_path"),
+            palette_name=data.get("palette_name", "Default"),
         )
 
 
